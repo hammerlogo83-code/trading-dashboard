@@ -506,68 +506,63 @@ function resample4h(data) {
 
 // ── Fetch ──────────────────────────────────────────────────────────────────
 async function fetchData(days, simIntraday) {
-  // Frankfurter.app - free, no key, CORS enabled, instant response
-  document.getElementById('loadingMsg').textContent = 'LADE USD/CHF DATEN...';
+  document.getElementById('loadingMsg').textContent = 'VERBINDE MIT API...';
 
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  const fmt = d => d.toISOString().split('T')[0];
-
-  const url = `https://api.frankfurter.app/${fmt(startDate)}..${fmt(endDate)}?from=USD&to=CHF`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-
-  let res;
+  // Try Frankfurter first (ECB data, no key, instant CORS)
   try {
-    res = await fetch(url, {signal: controller.signal});
-  } catch(e) {
-    clearTimeout(timeout);
-    if(e.name === 'AbortError') throw new Error('Timeout — keine Antwort nach 8s');
-    throw new Error('Netzwerkfehler: ' + e.message);
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days - 10); // extra days for weekends
+    const fmt = d => d.toISOString().split('T')[0];
+    const url = `https://api.frankfurter.app/${fmt(start)}..${fmt(end)}?from=USD&to=CHF`;
+
+    document.getElementById('loadingMsg').textContent = 'LADE KURSDATEN...';
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('Frankfurter HTTP ' + res.status);
+    const json = await res.json();
+    if(!json.rates) throw new Error('Keine Daten');
+
+    const dates = Object.keys(json.rates).sort();
+    let dailyData = dates.map((dt, i) => {
+      const close = json.rates[dt].CHF;
+      const prev  = i > 0 ? json.rates[dates[i-1]].CHF : close;
+      const noise = close * 0.0015;
+      return {
+        date:  new Date(dt + 'T12:00:00'),
+        open:  prev,
+        high:  Math.max(close, prev) + Math.random() * noise,
+        low:   Math.min(close, prev) - Math.random() * noise,
+        close: close
+      };
+    });
+
+    document.getElementById('loadingMsg').textContent = 'BERECHNE INDIKATOREN...';
+
+    if(!simIntraday) return dailyData;
+
+    // Simulate intraday from daily
+    const intradayData = [];
+    dailyData.slice(-days).forEach(day => {
+      for(let h = 7; h <= 22; h++) {
+        const t = new Date(day.date);
+        t.setHours(h, 0, 0, 0);
+        const progress = (h - 7) / 15;
+        const noise = day.close * 0.0005;
+        const price = day.open + (day.close - day.open) * progress + (Math.random()-0.5)*noise*2;
+        intradayData.push({
+          date:  new Date(t),
+          open:  price,
+          high:  price + Math.random()*noise,
+          low:   price - Math.random()*noise,
+          close: price
+        });
+      }
+    });
+    return intradayData;
+
+  } catch(err) {
+    throw new Error('Daten konnten nicht geladen werden: ' + err.message);
   }
-  clearTimeout(timeout);
-
-  if(!res.ok) throw new Error(`HTTP ${res.status}`);
-  const json = await res.json();
-  if(!json.rates) throw new Error('Keine Kursdaten');
-
-  // Build daily candles from Frankfurter data
-  const dates = Object.keys(json.rates).sort();
-  let dailyData = dates.map((dt, i) => {
-    const close = json.rates[dt].CHF;
-    const prev  = i > 0 ? json.rates[dates[i-1]].CHF : close;
-    const noise = close * 0.002;
-    return {
-      date:  new Date(dt),
-      open:  prev,
-      high:  close + Math.random() * noise,
-      low:   close - Math.random() * noise,
-      close: close
-    };
-  });
-
-  if(!simIntraday) return dailyData;
-
-  // Simulate intraday (1h) from daily data for last 5 days
-  const intradayData = [];
-  dailyData.slice(-days).forEach(day => {
-    for(let h = 8; h <= 22; h++) {
-      const t = new Date(day.date);
-      t.setHours(h);
-      const progress = (h - 8) / 14;
-      const noise = day.close * 0.0008;
-      const price = day.open + (day.close - day.open) * progress + (Math.random()-0.5)*noise;
-      intradayData.push({
-        date:  new Date(t),
-        open:  price - Math.random()*noise*0.5,
-        high:  price + Math.random()*noise,
-        low:   price - Math.random()*noise,
-        close: price
-      });
-    }
-  });
-  return intradayData;
 }
   const r=json.chart?.result?.[0];
   if(!r) throw new Error('Keine Daten von Yahoo Finance');
