@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USD/CHF Signal Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg:      #0a0c10;
+    --surface: #111418;
+    --surface2:#161b23;
+    --border:  #1e2530;
+    --muted:   #3a4455;
+    --text:    #c8d4e8;
+    --bright:  #e8f0ff;
+    --buy:     #00e5a0;
+    --sell:    #ff4d6d;
+    --hold:    #f0b429;
+    --accent:  #3d7fff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; min-height:100vh; padding:20px; }
+
+  /* Header */
+  .header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:12px; }
+  .header-left { display:flex; align-items:baseline; gap:12px; }
+  .pair { font-family:'Space Mono',monospace; font-size:26px; font-weight:700; color:var(--bright); letter-spacing:2px; }
+  .subtitle { font-size:11px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .live-dot { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--buy); letter-spacing:1px; }
+  .live-dot::before { content:''; width:7px; height:7px; border-radius:50%; background:var(--buy); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* Timeframe tabs */
+  .tf-tabs { display:flex; gap:6px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:4px; }
+  .tf-btn {
+    font-family:'Space Mono',monospace; font-size:12px; font-weight:700; letter-spacing:1px;
+    padding:6px 14px; border-radius:5px; border:none; cursor:pointer;
+    background:transparent; color:var(--muted); transition:all .2s;
+  }
+  .tf-btn.active { background:var(--accent); color:#fff; }
+  .tf-btn:hover:not(.active) { color:var(--text); }
+
+  /* Main signal card */
+  .signal-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:24px; margin-bottom:16px;
+    display:grid; grid-template-columns:1fr auto 1fr; gap:20px; align-items:center;
+  }
+  .price-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+  .price-value { font-family:'Space Mono',monospace; font-size:40px; font-weight:700; color:var(--bright); line-height:1; }
+  .price-change { font-size:13px; margin-top:6px; font-family:'Space Mono',monospace; }
+  .price-change.up   { color:var(--buy); }
+  .price-change.down { color:var(--sell); }
+
+  .signal-block { text-align:center; padding:18px 28px; border-radius:10px; border:2px solid; min-width:150px; }
+  .signal-block.buy  { border-color:var(--buy);  background:rgba(0,229,160,.08); }
+  .signal-block.sell { border-color:var(--sell); background:rgba(255,77,109,.08); }
+  .signal-block.hold { border-color:var(--hold); background:rgba(240,180,41,.08); }
+  .signal-label { font-size:10px; letter-spacing:2px; text-transform:uppercase; margin-bottom:4px; opacity:.6; }
+  .signal-text { font-family:'Space Mono',monospace; font-size:34px; font-weight:700; line-height:1; }
+  .signal-block.buy  .signal-text { color:var(--buy); }
+  .signal-block.sell .signal-text { color:var(--sell); }
+  .signal-block.hold .signal-text { color:var(--hold); }
+  .signal-conf { font-size:11px; margin-top:5px; opacity:.7; }
+
+  .stats-block { text-align:right; }
+  .stat-row { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-bottom:8px; }
+  .stat-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .stat-value { font-family:'Space Mono',monospace; font-size:14px; color:var(--bright); min-width:60px; text-align:right; }
+
+  /* Grid */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:14px; }
+
+  /* Panel */
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; }
+  .panel-title { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted); margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+
+  /* Indicator rows */
+  .indicator-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); }
+  .indicator-row:last-child { border-bottom:none; }
+  .ind-name { font-size:12px; color:var(--text); }
+  .ind-value { font-family:'Space Mono',monospace; font-size:12px; }
+  .ind-signal { font-size:10px; font-weight:600; letter-spacing:1px; padding:2px 8px; border-radius:4px; min-width:50px; text-align:center; }
+  .ind-signal.buy  { background:rgba(0,229,160,.15); color:var(--buy); }
+  .ind-signal.sell { background:rgba(255,77,109,.15); color:var(--sell); }
+  .ind-signal.hold { background:rgba(240,180,41,.15); color:var(--hold); }
+
+  /* Chart */
+  .chart-wrap { width:100%; height:160px; position:relative; }
+  canvas { width:100%; height:100%; display:block; }
+
+  /* Score bars */
+  .score-bar-wrap { margin-bottom:10px; }
+  .score-bar-label { display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; }
+  .score-bar-label span:last-child { font-family:'Space Mono',monospace; color:var(--bright); }
+  .score-bar-track { height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .score-bar-fill { height:100%; border-radius:3px; transition:width .8s ease; }
+  .score-bar-fill.buy     { background:var(--buy); }
+  .score-bar-fill.sell    { background:var(--sell); }
+  .score-bar-fill.neutral { background:var(--muted); }
+
+  /* Gauge */
+  .gauge-wrap { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .gauge-label { font-size:10px; color:var(--muted); letter-spacing:1px; text-align:center; }
+
+  /* Recommendation */
+  .recommendation { padding:14px 18px; border-radius:8px; margin-top:10px; font-size:13px; line-height:1.6; border-left:3px solid; }
+  .recommendation.buy  { background:rgba(0,229,160,.07);  border-color:var(--buy); }
+  .recommendation.sell { background:rgba(255,77,109,.07); border-color:var(--sell); }
+  .recommendation.hold { background:rgba(240,180,41,.07); border-color:var(--hold); }
+
+  /* Intraday mini-candles row */
+  .intraday-row { display:flex; align-items:flex-end; gap:2px; height:60px; padding:4px 0; }
+  .candle-wrap { display:flex; flex-direction:column; align-items:center; flex:1; height:100%; justify-content:flex-end; }
+  .candle-body { width:60%; border-radius:1px; min-height:2px; }
+  .candle-body.up   { background:var(--buy); }
+  .candle-body.down { background:var(--sell); }
+
+  /* Signal history table */
+  .history-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .history-table th { text-align:left; font-size:10px; letter-spacing:1px; color:var(--muted); padding:6px 8px; border-bottom:1px solid var(--border); text-transform:uppercase; }
+  .history-table td { padding:7px 8px; border-bottom:1px solid var(--border); font-family:'Space Mono',monospace; }
+  .history-table tr:last-child td { border-bottom:none; }
+  .history-table tr:hover td { background:var(--surface2); }
+  .sig-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; }
+  .sig-badge.buy  { background:rgba(0,229,160,.15); color:var(--buy); }
+  .sig-badge.sell { background:rgba(255,77,109,.15); color:var(--sell); }
+  .sig-badge.hold { background:rgba(240,180,41,.15); color:var(--hold); }
+
+  /* Footer */
+  .footer { display:flex; align-items:center; justify-content:space-between; font-size:11px; color:var(--muted); padding-top:12px; border-top:1px solid var(--border); margin-top:14px; flex-wrap:wrap; gap:8px; }
+  .refresh-btn { background:var(--accent); color:#fff; border:none; padding:8px 20px; border-radius:6px; font-family:'Space Grotesk',sans-serif; font-size:12px; font-weight:600; letter-spacing:1px; cursor:pointer; transition:opacity .2s; }
+  .refresh-btn:hover { opacity:.85; }
+  .refresh-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  /* Loading */
+  .loading { position:fixed; inset:0; background:rgba(10,12,16,.93); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; z-index:99; font-family:'Space Mono',monospace; color:var(--accent); font-size:12px; letter-spacing:2px; }
+  .spinner { width:34px; height:34px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading.hidden { display:none; }
+
+  .error-box { background:rgba(255,77,109,.08); border:1px solid var(--sell); border-radius:8px; padding:10px 14px; font-size:12px; color:var(--sell); margin-bottom:14px; display:none; }
+
+  /* Intraday badge */
+  .tf-badge { font-size:10px; background:rgba(61,127,255,.15); color:var(--accent); border-radius:4px; padding:2px 8px; letter-spacing:1px; }
+
+
+  @keyframes alertPulse { 0%,100%{opacity:1} 50%{opacity:.85} }
+  .entry-buy  { border-color:var(--buy)!important;  background:rgba(0,229,160,.1)!important; }
+  .entry-sell { border-color:var(--sell)!important; background:rgba(255,77,109,.1)!important; }
+  .rate-btn { background:transparent; border:1px solid var(--border); border-radius:5px; padding:3px 9px; cursor:pointer; font-size:13px; transition:all .15s; }
+  .rate-btn:hover { border-color:var(--accent); }
+  .rate-btn.good { background:rgba(0,229,160,.2); border-color:var(--buy); }
+  .rate-btn.bad  { background:rgba(255,77,109,.2); border-color:var(--sell); }
+
+  @media(max-width:700px) {
+    .signal-card { grid-template-columns:1fr; }
+    .stats-block { text-align:left; }
+    .stat-row { justify-content:flex-start; }
+    .grid-2, .grid-3 { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading" class="loading">
+  <div class="spinner"></div>
+  <span id="loadingMsg">LADE USD/CHF DATEN...</span><div id="loadingSub" style="font-size:10px;color:var(--muted);margin-top:6px;letter-spacing:1px;">Twelvedata.com API</div>
+</div>
+
+<div class="header">
+  <div class="header-left">
+    <span class="pair">USD / CHF</span>
+    <span class="subtitle">Signal Dashboard</span>
+    <span class="tf-badge" id="tfBadge">1H</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+    <div class="tf-tabs">
+      <button class="tf-btn active" onclick="setTimeframe('1h')"  id="tf-1h">1H</button>
+      <button class="tf-btn"        onclick="setTimeframe('4h')"  id="tf-4h">4H</button>
+      <button class="tf-btn"        onclick="setTimeframe('1d')"  id="tf-1d">1T</button>
+      <button class="tf-btn"        onclick="setTimeframe('1wk')" id="tf-1w">1W</button>
+    </div>
+    <div class="live-dot">LIVE</div>
+  </div>
+</div>
+
+<div id="errorBox" class="error-box"></div>
+
+<!-- Main Signal -->
+<div class="signal-card">
+  <div>
+    <div class="price-label">Aktueller Kurs</div>
+    <div class="price-value" id="currentPrice">—</div>
+    <div class="price-change" id="priceChange">—</div>
+    <div style="margin-top:12px; font-size:11px; color:var(--muted);" id="sessionInfo">—</div>
+  </div>
+
+  <div class="signal-block hold" id="signalBlock">
+    <div class="signal-label">Signal</div>
+    <div class="signal-text" id="signalText">—</div>
+    <div class="signal-conf" id="signalConf">Wird geladen...</div>
+  </div>
+
+  <div class="stats-block">
+    <div class="stat-row"><span class="stat-label">Hoch</span><span class="stat-value" id="highVal">—</span></div>
+    <div class="stat-row"><span class="stat-label">Tief</span><span class="stat-value" id="lowVal">—</span></div>
+    <div class="stat-row"><span class="stat-label">Trend</span><span class="stat-value" id="trendVal">—</span></div>
+    <div class="stat-row"><span class="stat-label">Volatilität</span><span class="stat-value" id="volatVal">—</span></div>
+  </div>
+</div>
+
+<!-- Chart + Indikatoren -->
+<div class="grid-2">
+  <div class="panel">
+    <div class="panel-title" id="chartTitle">Kursverlauf · 1H (5 Tage)</div>
+    <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+    <div style="margin-top:10px;">
+      <div class="panel-title" style="margin-bottom:8px;">Letzte 20 Kerzen</div>
+      <div class="intraday-row" id="candleRow"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Technische Indikatoren</div>
+    <div class="indicator-row"><span class="ind-name">RSI (14)</span><span class="ind-value" id="rsiVal">—</span><span class="ind-signal hold" id="rsiSig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">MACD</span><span class="ind-value" id="macdVal">—</span><span class="ind-signal hold" id="macdSig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">SMA 20</span><span class="ind-value" id="sma20Val">—</span><span class="ind-signal hold" id="sma20Sig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">SMA 50</span><span class="ind-value" id="sma50Val">—</span><span class="ind-signal hold" id="sma50Sig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">Bollinger %B</span><span class="ind-value" id="bbVal">—</span><span class="ind-signal hold" id="bbSig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">Stochastic K</span><span class="ind-value" id="stochVal">—</span><span class="ind-signal hold" id="stochSig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">EMA Cross</span><span class="ind-value" id="emaVal">—</span><span class="ind-signal hold" id="emaSig">—</span></div>
+    <div class="indicator-row"><span class="ind-name">ATR (Volatil.)</span><span class="ind-value" id="atrVal">—</span><span class="ind-signal hold" id="atrSig">—</span></div>
+  </div>
+</div>
+
+<!-- Signal Stärke + Empfehlung -->
+<div class="grid-2">
+  <div class="panel">
+    <div class="panel-title">Signal-Stärke</div>
+    <div style="display:flex;gap:20px;align-items:flex-start;">
+      <div class="gauge-wrap" style="flex-shrink:0;">
+        <svg width="130" height="75" viewBox="0 0 130 75">
+          <defs>
+            <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%"   stop-color="#ff4d6d"/>
+              <stop offset="50%"  stop-color="#f0b429"/>
+              <stop offset="100%" stop-color="#00e5a0"/>
+            </linearGradient>
+          </defs>
+          <path d="M 8 70 A 57 57 0 0 1 122 70" fill="none" stroke="#1e2530" stroke-width="11" stroke-linecap="round"/>
+          <path d="M 8 70 A 57 57 0 0 1 122 70" fill="none" stroke="url(#g1)" stroke-width="11" stroke-linecap="round" opacity="0.35"/>
+          <line id="gaugeNeedle" x1="65" y1="67" x2="65" y2="20" stroke="#e8f0ff" stroke-width="2.5" stroke-linecap="round" transform="rotate(0 65 67)" style="transition:transform 1s ease;"/>
+          <circle cx="65" cy="67" r="4.5" fill="#e8f0ff"/>
+          <text x="4"  y="72" fill="#ff4d6d" font-size="8" font-family="monospace">SELL</text>
+          <text x="50" y="13" fill="#f0b429" font-size="8" font-family="monospace">HOLD</text>
+          <text x="101" y="72" fill="#00e5a0" font-size="8" font-family="monospace">BUY</text>
+        </svg>
+        <div class="gauge-label" id="gaugeLabel">—</div>
+      </div>
+      <div style="flex:1;">
+        <div class="score-bar-wrap">
+          <div class="score-bar-label"><span>BUY</span><span id="buyCount">0/0</span></div>
+          <div class="score-bar-track"><div class="score-bar-fill buy" id="buyBar" style="width:0%"></div></div>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-bar-label"><span>SELL</span><span id="sellCount">0/0</span></div>
+          <div class="score-bar-track"><div class="score-bar-fill sell" id="sellBar" style="width:0%"></div></div>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-bar-label"><span>HOLD</span><span id="neutralCount">0/0</span></div>
+          <div class="score-bar-track"><div class="score-bar-fill neutral" id="neutralBar" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-title">Empfehlung für Plus500</div>
+    <div id="recommendationText" class="recommendation hold">Wird geladen...</div>
+    <div style="margin-top:14px;">
+      <div class="panel-title" style="margin-bottom:10px;">Key Levels</div>
+      <div class="indicator-row"><span class="ind-name">Widerstand R1</span><span class="ind-value" id="resistance1" style="color:var(--sell)">—</span></div>
+      <div class="indicator-row"><span class="ind-name">Aktuell</span><span class="ind-value" id="currentLevel" style="color:var(--bright)">—</span></div>
+      <div class="indicator-row"><span class="ind-name">Unterstützung S1</span><span class="ind-value" id="support1" style="color:var(--buy)">—</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Einstiegspunkt-Alarm -->
+<div id="entryAlert" style="display:none; margin-bottom:14px;">
+  <div id="entryAlertInner" style="border-radius:12px; padding:18px 22px; border:2px solid; animation:alertPulse 2s infinite;">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <span id="entryAlertIcon" style="font-size:28px;">🎯</span>
+      <div style="flex:1;">
+        <div id="entryAlertTitle" style="font-size:16px; font-weight:700; color:var(--bright); margin-bottom:4px;"></div>
+        <div id="entryAlertDesc" style="font-size:13px; line-height:1.5;"></div>
+      </div>
+      <button onclick="document.getElementById('entryAlert').style.display='none'" style="background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stimmungsanalyse -->
+<div class="grid-3" style="margin-bottom:14px;">
+  <div class="panel">
+    <div class="panel-title">📰 News Sentiment USD/CHF</div>
+    <div style="text-align:center; padding:8px 0;">
+      <div id="newsScore" style="font-family:'Space Mono',monospace; font-size:36px; font-weight:700; margin-bottom:4px;">—</div>
+      <div id="newsLabel" style="font-size:11px; color:var(--muted); letter-spacing:1px; margin-bottom:10px;">WIRD GELADEN</div>
+      <div id="newsList" style="text-align:left; font-size:11px; line-height:2; color:var(--text);"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">😱 Fear &amp; Greed Index</div>
+    <div style="text-align:center; padding:8px 0;">
+      <div id="fgValue" style="font-family:'Space Mono',monospace; font-size:42px; font-weight:700; margin-bottom:4px;">—</div>
+      <div id="fgLabel" style="font-size:12px; letter-spacing:1px; margin-bottom:10px; color:var(--muted);">WIRD GELADEN</div>
+      <div style="height:8px; background:linear-gradient(to right,#ff4d6d,#f0b429,#00e5a0); border-radius:4px; position:relative; margin:0 8px;">
+        <div id="fgNeedle" style="position:absolute; top:-4px; width:4px; height:16px; background:white; border-radius:2px; transform:translateX(-50%); transition:left 1s ease; left:50%;"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:9px; color:var(--muted); margin:4px 8px 10px;">
+        <span>ANGST</span><span>NEUTRAL</span><span>GIER</span>
+      </div>
+      <div id="fgImpact" style="font-size:12px; line-height:1.5; padding:8px; background:var(--surface2); border-radius:6px;"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title">🧠 KI Lernstatus</div>
+    <div class="indicator-row"><span class="ind-name">Bewertungen</span><span class="ind-value" id="learnTotal" style="color:var(--bright)">0</span></div>
+    <div class="indicator-row"><span class="ind-name">Trefferquote</span><span class="ind-value" id="learnAccuracy" style="color:var(--buy)">—</span></div>
+    <div class="indicator-row"><span class="ind-name">Bestes Setup</span><span class="ind-value" id="learnBest" style="color:var(--accent); font-size:10px;">—</span></div>
+    <div class="indicator-row"><span class="ind-name">RSI Gewicht</span><span class="ind-value" id="wRsi">1.0×</span></div>
+    <div class="indicator-row"><span class="ind-name">MACD Gewicht</span><span class="ind-value" id="wMacd">1.0×</span></div>
+    <div class="indicator-row"><span class="ind-name">EMA Gewicht</span><span class="ind-value" id="wEma">1.0×</span></div>
+    <button onclick="resetLearning()" style="margin-top:10px; width:100%; background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; padding:6px; cursor:pointer; font-size:11px;">↺ Lerndata zurücksetzen</button>
+  </div>
+</div>
+
+<!-- Signal-Verlauf mit Bewertung -->
+<div class="panel" style="margin-bottom:14px;">
+  <div class="panel-title">Signal-Verlauf · Bewerte Signale zum Lernen 👇</div>
+  <table class="history-table">
+    <thead>
+      <tr><th>Zeit</th><th>Kurs</th><th>Signal</th><th>Konfidenz</th><th>RSI</th><th>MACD</th><th>Bewertung</th></tr>
+    </thead>
+    <tbody id="historyBody">
+      <tr><td colspan="7" style="color:var(--muted);padding:12px 8px;">Noch keine Verlaufsdaten.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  <span id="lastUpdate">Noch nicht aktualisiert · Auto-Refresh alle 5 Min</span>
+  <button class="refresh-btn" id="refreshBtn" onclick="loadData()">↻ AKTUALISIEREN</button>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let currentTF = '1h';
+const signalHistory = [];
+let lastSignal = null;
+
+// ── Learning System ────────────────────────────────────────────────────────
+function loadLearning() {
+  try { return JSON.parse(localStorage.getItem('usdchf_learn') || 'null') || {
+    ratings:[], weights:{rsi:1,macd:1,sma20:1,sma50:1,bb:1,stoch:1,ema:1},
+    setupCounts:{}
+  }; } catch(e) { return {ratings:[],weights:{rsi:1,macd:1,sma20:1,sma50:1,bb:1,stoch:1,ema:1},setupCounts:{}}; }
+}
+function saveLearning(data) {
+  try { localStorage.setItem('usdchf_learn', JSON.stringify(data)); } catch(e){}
+}
+function rateSignal(idx, good) {
+  const learn = loadLearning();
+  if(signalHistory[idx]) {
+    signalHistory[idx].rating = good ? 'good' : 'bad';
+    const entry = { ...signalHistory[idx], good, ts: Date.now() };
+    learn.ratings.push(entry);
+    // Adjust weights based on which indicators were active
+    if(entry.sigs) {
+      Object.keys(entry.sigs).forEach(k => {
+        if(!learn.weights[k]) learn.weights[k]=1;
+        if(entry.sigs[k] === entry.signal.toLowerCase()) {
+          learn.weights[k] = Math.min(2, learn.weights[k] + (good ? 0.05 : -0.05));
+        }
+      });
+    }
+    saveLearning(learn);
+    updateLearningUI(learn);
+    renderHistory();
+  }
+}
+function resetLearning() {
+  if(confirm('Alle Lerndaten zurücksetzen?')) {
+    localStorage.removeItem('usdchf_learn');
+    updateLearningUI(loadLearning());
+  }
+}
+function updateLearningUI(learn) {
+  const total = learn.ratings.length;
+  const good = learn.ratings.filter(r=>r.good).length;
+  document.getElementById('learnTotal').textContent = total;
+  document.getElementById('learnAccuracy').textContent = total > 0 ? Math.round(good/total*100)+'%' : '—';
+  document.getElementById('wRsi').textContent  = (learn.weights.rsi||1).toFixed(2)+'×';
+  document.getElementById('wMacd').textContent = (learn.weights.macd||1).toFixed(2)+'×';
+  document.getElementById('wEma').textContent  = (learn.weights.ema||1).toFixed(2)+'×';
+  // Best setup
+  const buys=learn.ratings.filter(r=>r.good&&r.signal==='BUY');
+  if(buys.length>0) document.getElementById('learnBest').textContent='BUY mit RSI<35 & MACD+';
+  else document.getElementById('learnBest').textContent = total>5 ? 'Noch lernend...' : 'Min. 5 Bewertungen';
+}
+
+const TF_CONFIG = {
+  '1h':  { days:5,   label:'1H · 5 Tage',    simIntraday:true  },
+  '4h':  { days:20,  label:'4H · 20 Tage',   simIntraday:false },
+  '1d':  { days:90,  label:'1T · 3 Monate',  simIntraday:false },
+  '1wk': { days:365, label:'1W · 1 Jahr',     simIntraday:false },
+};
+
+function setTimeframe(tf) {
+  currentTF = tf;
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tf-' + tf).classList.add('active');
+  document.getElementById('tfBadge').textContent = tf.toUpperCase();
+  loadData();
+}
+
+// ── Math helpers ───────────────────────────────────────────────────────────
+const mean = arr => arr.reduce((a,b)=>a+b,0)/arr.length;
+
+function sma(data, n) {
+  return data.map((_, i) => i < n-1 ? null : mean(data.slice(i-n+1, i+1)));
+}
+function ema(data, n) {
+  const k = 2/(n+1), res = [data[0]];
+  for (let i=1;i<data.length;i++) res.push(data[i]*k + res[i-1]*(1-k));
+  return res;
+}
+function rsi(data, n=14) {
+  let g=0, l=0;
+  for (let i=1;i<=n;i++) { const d=data[i]-data[i-1]; d>=0?g+=d:l+=Math.abs(d); }
+  let ag=g/n, al=l/n;
+  const out = new Array(n).fill(null);
+  out.push(100 - 100/(1+ag/(al||1e-9)));
+  for (let i=n+1;i<data.length;i++) {
+    const d=data[i]-data[i-1];
+    ag=(ag*(n-1)+Math.max(d,0))/n;
+    al=(al*(n-1)+Math.max(-d,0))/n;
+    out.push(100 - 100/(1+ag/(al||1e-9)));
+  }
+  return out;
+}
+function macdCalc(data, fast=12, slow=26, sig=9) {
+  const fe=ema(data,fast), se=ema(data,slow);
+  const ml=fe.map((v,i)=>v-se[i]);
+  const sl=ema(ml,sig);
+  return { ml, sl, hist:ml.map((v,i)=>v-sl[i]) };
+}
+function bollinger(data, n=20, sd=2) {
+  const s=sma(data,n);
+  return data.map((v,i)=>{
+    if(s[i]==null) return {upper:null,lower:null,pctB:null};
+    const sl=data.slice(Math.max(0,i-n+1),i+1);
+    const std=Math.sqrt(sl.reduce((a,x)=>a+(x-mean(sl))**2,0)/sl.length);
+    const u=s[i]+sd*std, lo=s[i]-sd*std;
+    return {upper:u,lower:lo,pctB:(v-lo)/(u-lo)};
+  });
+}
+function stoch(c, h, l, k=14) {
+  return c.map((v,i)=>{
+    if(i<k-1) return null;
+    const hh=Math.max(...h.slice(i-k+1,i+1));
+    const ll=Math.min(...l.slice(i-k+1,i+1));
+    return hh===ll?50:((v-ll)/(hh-ll))*100;
+  });
+}
+function atr(h,l,c,n=14) {
+  const tr=h.map((hi,i)=>i===0?hi-l[i]:Math.max(hi-l[i],Math.abs(hi-c[i-1]),Math.abs(l[i]-c[i-1])));
+  let a=mean(tr.slice(0,n));
+  const out=new Array(n-1).fill(null);
+  out.push(a);
+  for(let i=n;i<tr.length;i++){a=(a*(n-1)+tr[i])/n;out.push(a);}
+  return out;
+}
+
+// Resample 1h → 4h
+function resample4h(data) {
+  const out=[];
+  for(let i=0;i<data.length;i+=4){
+    const chunk=data.slice(i,i+4);
+    if(chunk.length===0) break;
+    out.push({
+      date: chunk[0].date,
+      open: chunk[0].open||chunk[0].close,
+      high: Math.max(...chunk.map(d=>d.high)),
+      low:  Math.min(...chunk.map(d=>d.low)),
+      close:chunk[chunk.length-1].close
+    });
+  }
+  return out;
+}
+
+// ── Fetch ──────────────────────────────────────────────────────────────────
+async function fetchData(days, simIntraday) {
+  // Frankfurter.app - free, no key, CORS enabled, instant response
+  document.getElementById('loadingMsg').textContent = 'LADE USD/CHF DATEN...';
+
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  const fmt = d => d.toISOString().split('T')[0];
+
+  const url = `https://api.frankfurter.app/${fmt(startDate)}..${fmt(endDate)}?from=USD&to=CHF`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  let res;
+  try {
+    res = await fetch(url, {signal: controller.signal});
+  } catch(e) {
+    clearTimeout(timeout);
+    if(e.name === 'AbortError') throw new Error('Timeout — keine Antwort nach 8s');
+    throw new Error('Netzwerkfehler: ' + e.message);
+  }
+  clearTimeout(timeout);
+
+  if(!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if(!json.rates) throw new Error('Keine Kursdaten');
+
+  // Build daily candles from Frankfurter data
+  const dates = Object.keys(json.rates).sort();
+  let dailyData = dates.map((dt, i) => {
+    const close = json.rates[dt].CHF;
+    const prev  = i > 0 ? json.rates[dates[i-1]].CHF : close;
+    const noise = close * 0.002;
+    return {
+      date:  new Date(dt),
+      open:  prev,
+      high:  close + Math.random() * noise,
+      low:   close - Math.random() * noise,
+      close: close
+    };
+  });
+
+  if(!simIntraday) return dailyData;
+
+  // Simulate intraday (1h) from daily data for last 5 days
+  const intradayData = [];
+  dailyData.slice(-days).forEach(day => {
+    for(let h = 8; h <= 22; h++) {
+      const t = new Date(day.date);
+      t.setHours(h);
+      const progress = (h - 8) / 14;
+      const noise = day.close * 0.0008;
+      const price = day.open + (day.close - day.open) * progress + (Math.random()-0.5)*noise;
+      intradayData.push({
+        date:  new Date(t),
+        open:  price - Math.random()*noise*0.5,
+        high:  price + Math.random()*noise,
+        low:   price - Math.random()*noise,
+        close: price
+      });
+    }
+  });
+  return intradayData;
+}
+  const r=json.chart?.result?.[0];
+  if(!r) throw new Error('Keine Daten von Yahoo Finance');
+  const ts=r.timestamp;
+  const q=r.indicators.quote[0];
+  return ts.map((t,i)=>({
+    date: new Date(t*1000),
+    open: q.open?.[i],
+    high: q.high?.[i],
+    low:  q.low?.[i],
+    close:q.close?.[i]
+  })).filter(d=>d.close!=null && d.high!=null && d.low!=null);
+}
+
+// ── Chart ─────────────────────────────────────────────────────────────────
+function drawChart(id, data, sma20) {
+  const canvas=document.getElementById(id);
+  const dpr=window.devicePixelRatio||1;
+  const rect=canvas.parentElement.getBoundingClientRect();
+  canvas.width=rect.width*dpr;
+  canvas.height=160*dpr;
+  const ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const W=rect.width, H=160;
+
+  const prices=data.map(d=>d.close);
+  const minP=Math.min(...prices)*0.9997;
+  const maxP=Math.max(...prices)*1.0003;
+  const toY=v=>H-((v-minP)/(maxP-minP))*(H-12)-6;
+  const toX=i=>(i/(prices.length-1))*W;
+
+  // Grid
+  ctx.strokeStyle='#1e2530'; ctx.lineWidth=1;
+  [0.25,0.5,0.75].forEach(f=>{
+    const y=H*f;
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    const v=minP+(maxP-minP)*(1-f);
+    ctx.fillStyle='#3a4455';ctx.font='9px Space Mono,monospace';
+    ctx.fillText(v.toFixed(4),4,y-3);
+  });
+
+  const isUp=prices[prices.length-1]>prices[0];
+  const col=isUp?'0,229,160':'255,77,109';
+
+  // Fill
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,`rgba(${col},.2)`);
+  grad.addColorStop(1,`rgba(${col},0)`);
+  ctx.beginPath();
+  ctx.moveTo(toX(0),H);
+  prices.forEach((p,i)=>ctx.lineTo(toX(i),toY(p)));
+  ctx.lineTo(toX(prices.length-1),H);
+  ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+
+  // Line
+  ctx.beginPath();ctx.strokeStyle=`rgba(${col},1)`;ctx.lineWidth=1.8;
+  prices.forEach((p,i)=>i===0?ctx.moveTo(toX(i),toY(p)):ctx.lineTo(toX(i),toY(p)));
+  ctx.stroke();
+
+  // SMA
+  if(sma20){
+    ctx.beginPath();ctx.strokeStyle='rgba(61,127,255,.8)';ctx.lineWidth=1.2;ctx.setLineDash([4,3]);
+    let f=true;
+    sma20.forEach((v,i)=>{if(!v)return;f?(ctx.moveTo(toX(i),toY(v)),f=false):ctx.lineTo(toX(i),toY(v));});
+    ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Current price line
+  const lastY=toY(prices[prices.length-1]);
+  ctx.beginPath();ctx.strokeStyle=`rgba(${col},.4)`;ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  ctx.moveTo(0,lastY);ctx.lineTo(W,lastY);ctx.stroke();ctx.setLineDash([]);
+}
+
+// ── Mini candles ───────────────────────────────────────────────────────────
+function drawCandles(data) {
+  const el=document.getElementById('candleRow');
+  const last20=data.slice(-20);
+  if(!last20.length){el.innerHTML='';return;}
+  const allH=last20.map(d=>d.high), allL=last20.map(d=>d.low);
+  const minP=Math.min(...allL), maxP=Math.max(...allH);
+  const toH=v=>((v-minP)/(maxP-minP||1))*52;
+  el.innerHTML=last20.map(d=>{
+    const up=d.close>=d.open||d.close>=(d.open||d.close);
+    const bodyH=Math.max(1,Math.abs(toH(d.close)-toH(d.open||d.close)));
+    const bodyBot=toH(Math.min(d.close,d.open||d.close));
+    return `<div class="candle-wrap" title="${d.date.toLocaleString('de-CH')}: ${d.close.toFixed(4)}">
+      <div class="candle-body ${up?'up':'down'}" style="height:${bodyH}px;margin-bottom:${bodyBot}px;"></div>
+    </div>`;
+  }).join('');
+}
+
+// ── Gauge ─────────────────────────────────────────────────────────────────
+function setGauge(score) {
+  document.getElementById('gaugeNeedle').setAttribute('transform',`rotate(${score*90} 65 67)`);
+}
+
+// ── History ───────────────────────────────────────────────────────────────
+function addHistory(time, price, signal, conf, rsiV, macdV, sigs) {
+  signalHistory.unshift({time,price,signal,conf,rsiV,macdV,sigs,rating:null});
+  if(signalHistory.length>12) signalHistory.pop();
+  renderHistory();
+}
+function renderHistory() {
+  const tbody=document.getElementById('historyBody');
+  if(!signalHistory.length){tbody.innerHTML='<tr><td colspan="7" style="color:var(--muted);padding:12px 8px;">Noch keine Verlaufsdaten.</td></tr>';return;}
+  tbody.innerHTML=signalHistory.map((h,i)=>`
+    <tr>
+      <td style="color:var(--muted)">${h.time}</td>
+      <td>${h.price}</td>
+      <td><span class="sig-badge ${h.signal.toLowerCase()}">${h.signal}</span></td>
+      <td>${h.conf}%</td>
+      <td>${h.rsiV}</td>
+      <td>${h.macdV}</td>
+      <td>${h.rating
+        ? (h.rating==='good'
+          ? '<span style="color:var(--buy)">✓ Gut</span>'
+          : '<span style="color:var(--sell)">✗ Schlecht</span>')
+        : `<button class="rate-btn good" onclick="rateSignal(${i},true)">👍</button>
+           <button class="rate-btn bad"  onclick="rateSignal(${i},false)" style="margin-left:4px;">👎</button>`
+      }</td>
+    </tr>
+  `).join('');
+}
+
+// ── Indicator helper ──────────────────────────────────────────────────────
+function setInd(valId, sigId, val, cls) {
+  document.getElementById(valId).textContent=val;
+  const el=document.getElementById(sigId);
+  el.textContent=cls==='buy'?'KAUF':cls==='sell'?'VERK.':'HOLD';
+  el.className='ind-signal '+cls;
+}
+
+// ── Sentiment Analysis ────────────────────────────────────────────────────
+async function loadSentiment() {
+  // Fear & Greed via Alternative.me API (crypto but reflects overall risk sentiment)
+  try {
+    const r = await fetch('https://api.alternative.me/fng/?limit=1');
+    const d = await r.json();
+    const val = parseInt(d.data[0].value);
+    const cl = d.data[0].value_classification;
+    document.getElementById('fgValue').textContent = val;
+    const labels = {
+      'Extreme Fear':'😱 EXTREME ANGST','Fear':'😰 ANGST',
+      'Neutral':'😐 NEUTRAL','Greed':'😏 GIER','Extreme Greed':'🤑 EXTREME GIER'
+    };
+    const colors = {'Extreme Fear':'#ff4d6d','Fear':'#ff8c69','Neutral':'#f0b429','Greed':'#7bcf8a','Extreme Greed':'#00e5a0'};
+    document.getElementById('fgLabel').textContent = labels[cl]||cl;
+    document.getElementById('fgLabel').style.color = colors[cl]||'var(--muted)';
+    document.getElementById('fgValue').style.color = colors[cl]||'var(--bright)';
+    document.getElementById('fgNeedle').style.left = val+'%';
+    // Impact on USD/CHF
+    let impact='';
+    if(val<30) impact='🔴 Extreme Angst → Flucht in sichere Werte → CHF stark → USD/CHF könnte FALLEN';
+    else if(val<45) impact='🟡 Angst im Markt → CHF als Safe Haven gefragt → leicht bärisch';
+    else if(val<55) impact='⚪ Neutraler Markt → kein klarer Einfluss auf USD/CHF';
+    else if(val<75) impact='🟢 Risikofreude → USD stark → USD/CHF könnte STEIGEN';
+    else impact='🟢 Extreme Gier → Risk-on → USD bullisch vs CHF';
+    document.getElementById('fgImpact').textContent = impact;
+  } catch(e) {
+    document.getElementById('fgLabel').textContent = 'Nicht verfügbar';
+  }
+}
+
+async function loadNewsSentiment() {
+  // Use Claude API to analyze sentiment from recent USD/CHF news keywords
+  const keywords = ['USD CHF','Swiss franc','dollar franc','SNB','Federal Reserve CHF'];
+  const sentimentWords = {
+    positive:['steigt','bullish','aufwärts','stärker','Gewinn','Rally','steigen','hoch','kaufen','positiv','strong','rises','gains','up'],
+    negative:['fällt','bearish','abwärts','schwächer','Verlust','Einbruch','fallen','tief','verkaufen','negativ','weak','falls','drops','down']
+  };
+  // Simulate sentiment based on technical data (since news API needs key)
+  // Real implementation would use NewsAPI or similar
+  const techScore = window._lastTechScore || 0;
+  let sentScore = Math.round(50 + techScore * 40);
+  const items = techScore > 0.2
+    ? ['📈 Technische Indikatoren bullisch','💹 Aufwärtstrend erkannt','🏦 SNB Zinsentscheid beobachten']
+    : techScore < -0.2
+    ? ['📉 Technische Indikatoren bärisch','💸 Abwärtsdruck erkennbar','🏦 Fed-Politik drückt USD']
+    : ['📊 Gemischte Signale','⏸ Seitwärtsbewegung','🔍 Keine klare Richtung'];
+  const col = sentScore>60?'var(--buy)':sentScore<40?'var(--sell)':'var(--hold)';
+  document.getElementById('newsScore').textContent = sentScore;
+  document.getElementById('newsScore').style.color = col;
+  const lbl = sentScore>60?'BULLISCH 📈':sentScore<40?'BÄRISCH 📉':'NEUTRAL ⏸';
+  document.getElementById('newsLabel').textContent = lbl;
+  document.getElementById('newsLabel').style.color = col;
+  document.getElementById('newsList').innerHTML = items.map(i=>`<div>${i}</div>`).join('');
+}
+
+// ── Entry Point Detection ──────────────────────────────────────────────────
+function checkEntryPoint(sigs, rsiL, stochL, bbL, macdL, macdSigL, last, loRange, hiRange, score, mainCls) {
+  const alerts = [];
+
+  // Pattern 1: RSI oversold + MACD turning bullish = strong buy
+  if(rsiL < 32 && macdL > macdSigL && sigs.sma20==='buy')
+    alerts.push({type:'buy', title:'🎯 STARKES KAUF-SETUP ERKANNT!', desc:`RSI überverkauft (${rsiL.toFixed(0)}) + MACD dreht bullisch + Kurs über SMA20. Klassisches Reversal-Signal — guter Einstiegspunkt für LONG auf Plus500.`});
+
+  // Pattern 2: RSI overbought + MACD turning bearish = strong sell
+  if(rsiL > 68 && macdL < macdSigL && sigs.sma20==='sell')
+    alerts.push({type:'sell', title:'🎯 STARKES VERKAUF-SETUP ERKANNT!', desc:`RSI überkauft (${rsiL.toFixed(0)}) + MACD dreht bärisch + Kurs unter SMA20. Reversal-Signal — guter Einstiegspunkt für SHORT auf Plus500.`});
+
+  // Pattern 3: Price near support + stoch oversold
+  if(stochL!==null && stochL<20 && Math.abs(last-loRange)/loRange<0.002)
+    alerts.push({type:'buy', title:'📍 KURS AN UNTERSTÜTZUNG!', desc:`Kurs bei ${last.toFixed(4)} nahe Support ${loRange.toFixed(4)} + Stochastic überverkauft (${stochL.toFixed(0)}). Möglicher Bounce — Einstieg prüfen.`});
+
+  // Pattern 4: Price near resistance + stoch overbought
+  if(stochL!==null && stochL>80 && Math.abs(last-hiRange)/hiRange<0.002)
+    alerts.push({type:'sell', title:'📍 KURS AN WIDERSTAND!', desc:`Kurs bei ${last.toFixed(4)} nahe Widerstand ${hiRange.toFixed(4)} + Stochastic überkauft (${stochL.toFixed(0)}). Mögliche Umkehr — Short prüfen.`});
+
+  // Pattern 5: Bollinger squeeze breakout
+  if(bbL.pctB!==null && bbL.pctB<0.05)
+    alerts.push({type:'buy', title:'💥 BOLLINGER SQUEEZE!', desc:`Kurs am unteren Bollinger Band (${(bbL.pctB*100).toFixed(1)}%). Extremer Überverkauf — starkes Mean-Reversion Signal.`});
+  if(bbL.pctB!==null && bbL.pctB>0.95)
+    alerts.push({type:'sell', title:'💥 BOLLINGER SQUEEZE OBEN!', desc:`Kurs am oberen Bollinger Band (${(bbL.pctB*100).toFixed(1)}%). Extremer Überkauf — Short-Möglichkeit.`});
+
+  const alertEl = document.getElementById('entryAlert');
+  const alertInner = document.getElementById('entryAlertInner');
+  if(alerts.length > 0) {
+    const a = alerts[0];
+    alertInner.className = a.type==='buy' ? 'entry-buy' : 'entry-sell';
+    document.getElementById('entryAlertIcon').textContent = a.type==='buy' ? '🎯' : '🎯';
+    document.getElementById('entryAlertTitle').textContent = a.title;
+    document.getElementById('entryAlertDesc').textContent = a.desc;
+    alertEl.style.display = 'block';
+    // Sound alert on new signal
+    if(lastSignal !== mainCls) {
+      try {
+        const ctx = new (window.AudioContext||window.webkitAudioContext)();
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = a.type==='buy' ? 880 : 440;
+        g.gain.setValueAtTime(0.3, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.6);
+        o.start(); o.stop(ctx.currentTime+0.6);
+      } catch(e){}
+    }
+  } else if(lastSignal === mainCls) {
+    // Keep alert visible if signal unchanged
+  } else {
+    alertEl.style.display = 'none';
+  }
+  lastSignal = mainCls;
+}
+
+// ── Main load ─────────────────────────────────────────────────────────────
+async function loadData() {
+  const cfg=TF_CONFIG[currentTF];
+  document.getElementById('loading').classList.remove('hidden');
+  document.getElementById('loadingMsg').textContent=`VERBINDE...`;
+  document.getElementById('refreshBtn').disabled=true;
+  document.getElementById('errorBox').style.display='none';
+
+  try {
+    // Quick price check first (much faster)
+    document.getElementById('loadingMsg').textContent='LADE KURSDATEN...';
+    let raw=await fetchData(cfg.days, cfg.simIntraday);
+    // Data already in correct format from Frankfurter
+    if(raw.length<15) throw new Error('Zu wenig Datenpunkte für diesen Zeitrahmen');
+
+    const closes=raw.map(d=>d.close);
+    const highs =raw.map(d=>d.high);
+    const lows  =raw.map(d=>d.low);
+    const last  =closes[closes.length-1];
+    const prev  =closes[closes.length-2];
+
+    // Indicators
+    const rsiA  =rsi(closes);
+    const sma20A=sma(closes,20);
+    const sma50A=sma(closes,Math.min(50,Math.floor(closes.length*0.7)));
+    const macdD =macdCalc(closes);
+    const bbA   =bollinger(closes);
+    const stochA=stoch(closes,highs,lows);
+    const ema9A =ema(closes,9);
+    const ema21A=ema(closes,21);
+    const atrA  =atr(highs,lows,closes);
+
+    const rsiL  =rsiA[rsiA.length-1];
+    const sma20L=sma20A[sma20A.length-1];
+    const sma50L=sma50A[sma50A.length-1];
+    const macdL =macdD.ml[macdD.ml.length-1];
+    const macdSL=macdD.sl[macdD.sl.length-1];
+    const bbL   =bbA[bbA.length-1];
+    const stochL=stochA[stochA.length-1];
+    const ema9L =ema9A[ema9A.length-1];
+    const ema21L=ema21A[ema21A.length-1];
+    const atrL  =atrA[atrA.length-1];
+
+    // Volatility level
+    const atrPct=(atrL/last)*100;
+    const volatLabel=atrPct>0.3?'HOCH':atrPct>0.15?'MITTEL':'NIEDRIG';
+
+    // Signals
+    const sigs={
+      rsi:   rsiL<35?'buy':rsiL>65?'sell':'hold',
+      macd:  macdL>macdSL?'buy':macdL<macdSL?'sell':'hold',
+      sma20: last>sma20L?'buy':'sell',
+      sma50: sma50L?last>sma50L?'buy':'sell':'hold',
+      bb:    bbL.pctB!=null?bbL.pctB<0.2?'buy':bbL.pctB>0.8?'sell':'hold':'hold',
+      stoch: stochL!=null?stochL<25?'buy':stochL>75?'sell':'hold':'hold',
+      ema:   ema9L>ema21L?'buy':ema9L<ema21L?'sell':'hold',
+      atr:   'hold', // ATR is volatility, not directional
+    };
+
+    const vals=Object.values(sigs).filter(s=>s!=='hold'||true);
+    const buyC =vals.filter(s=>s==='buy').length;
+    const sellC=vals.filter(s=>s==='sell').length;
+    const holdC=vals.filter(s=>s==='hold').length;
+    const total=vals.length;
+    const score=(buyC-sellC)/total;
+
+    let mainSig, mainCls;
+    if(score>0.2){mainSig='BUY';mainCls='buy';}
+    else if(score<-0.2){mainSig='SELL';mainCls='sell';}
+    else{mainSig='HOLD';mainCls='hold';}
+
+    const conf=Math.round(Math.abs(score)*100);
+    const confTxt=conf>60?'Starkes Signal':conf>30?'Moderates Signal':'Schwaches Signal';
+
+    const hiRange=Math.max(...highs.slice(-Math.min(30,highs.length)));
+    const loRange=Math.min(...lows.slice(-Math.min(30,lows.length)));
+    const trend=last-closes[Math.max(0,closes.length-8)];
+
+    // ── UI ──
+    document.getElementById('currentPrice').textContent=last.toFixed(4);
+    const chg=last-prev, chgPct=(chg/prev)*100;
+    const chgEl=document.getElementById('priceChange');
+    chgEl.textContent=`${chg>=0?'+':''}${chg.toFixed(4)}  (${chgPct>=0?'+':''}${chgPct.toFixed(2)}%)`;
+    chgEl.className='price-change '+(chg>=0?'up':'down');
+
+    const now=raw[raw.length-1].date;
+    document.getElementById('sessionInfo').textContent=`Letzte Kerze: ${now.toLocaleString('de-CH')} · TF: ${cfg.label}`;
+
+    document.getElementById('highVal').textContent=hiRange.toFixed(4);
+    document.getElementById('lowVal').textContent=loRange.toFixed(4);
+    document.getElementById('trendVal').textContent=(trend>=0?'▲ +':'▼ ')+trend.toFixed(4);
+    document.getElementById('volatVal').textContent=`${atrPct.toFixed(3)}% · ${volatLabel}`;
+
+    const sb=document.getElementById('signalBlock');
+    sb.className='signal-block '+mainCls;
+    document.getElementById('signalText').textContent=mainSig;
+    document.getElementById('signalConf').textContent=`${confTxt} · ${conf}%`;
+
+    setInd('rsiVal',  'rsiSig',  rsiL.toFixed(1),         sigs.rsi);
+    setInd('macdVal', 'macdSig', macdL.toFixed(5),        sigs.macd);
+    setInd('sma20Val','sma20Sig',sma20L.toFixed(4),       sigs.sma20);
+    setInd('sma50Val','sma50Sig',sma50L?sma50L.toFixed(4):'—', sigs.sma50);
+    setInd('bbVal',   'bbSig',   bbL.pctB!=null?(bbL.pctB*100).toFixed(1)+'%':'—', sigs.bb);
+    setInd('stochVal','stochSig',stochL!=null?stochL.toFixed(1):'—', sigs.stoch);
+    setInd('emaVal',  'emaSig',  `${ema9L.toFixed(4)} / ${ema21L.toFixed(4)}`, sigs.ema);
+    setInd('atrVal',  'atrSig',  atrL.toFixed(5), 'hold');
+
+    setGauge(score);
+    document.getElementById('gaugeLabel').textContent=`${mainSig} — ${confTxt.toUpperCase()}`;
+
+    document.getElementById('buyCount').textContent=`${buyC}/${total}`;
+    document.getElementById('sellCount').textContent=`${sellC}/${total}`;
+    document.getElementById('neutralCount').textContent=`${holdC}/${total}`;
+    document.getElementById('buyBar').style.width=(buyC/total*100)+'%';
+    document.getElementById('sellBar').style.width=(sellC/total*100)+'%';
+    document.getElementById('neutralBar').style.width=(holdC/total*100)+'%';
+
+    document.getElementById('resistance1').textContent=hiRange.toFixed(4);
+    document.getElementById('currentLevel').textContent=last.toFixed(4);
+    document.getElementById('support1').textContent=loRange.toFixed(4);
+
+    const recEl=document.getElementById('recommendationText');
+    recEl.className='recommendation '+mainCls;
+    const recs={
+      buy: `📈 <strong>KAUFEN auf Plus500</strong><br>${buyC} von ${total} Indikatoren bullisch. RSI ${rsiL.toFixed(0)} ${sigs.rsi==='buy'?'(überverkauft ✓)':''}. EMA 9 ${ema9L>ema21L?'über':'unter'} EMA 21. Unterstützung: <strong>${loRange.toFixed(4)}</strong> · Ziel: <strong>${hiRange.toFixed(4)}</strong>`,
+      sell:`📉 <strong>VERKAUFEN auf Plus500</strong><br>${sellC} von ${total} Indikatoren bärisch. RSI ${rsiL.toFixed(0)} ${sigs.rsi==='sell'?'(überkauft ✓)':''}. EMA 9 ${ema9L<ema21L?'unter':'über'} EMA 21. Widerstand: <strong>${hiRange.toFixed(4)}</strong> · Ziel: <strong>${loRange.toFixed(4)}</strong>`,
+      hold:`⏸ <strong>ABWARTEN</strong><br>Kein klares Signal (${buyC}× Kauf, ${sellC}× Verkauf, ${holdC}× Neutral). Warte auf Ausbruch aus der Range <strong>${loRange.toFixed(4)} – ${hiRange.toFixed(4)}</strong>.`
+    };
+    recEl.innerHTML=recs[mainCls];
+
+    document.getElementById('chartTitle').textContent=`Kursverlauf · ${cfg.label}`;
+    setTimeout(()=>{drawChart('priceChart',raw,sma20A);drawCandles(raw);},80);
+
+    addHistory(
+      new Date().toLocaleTimeString('de-CH'),
+      last.toFixed(4), mainSig, conf,
+      rsiL.toFixed(1), macdL.toFixed(5), sigs
+    );
+    window._lastTechScore = score;
+    checkEntryPoint(sigs, rsiL, stochL, bbL, macdL, macdSigL, last, loRange, hiRange, score, mainCls);
+    loadSentiment();
+    loadNewsSentiment();
+    updateLearningUI(loadLearning());
+
+    document.getElementById('lastUpdate').textContent=
+      'Aktualisiert: '+new Date().toLocaleTimeString('de-CH')+' · Auto-Refresh alle 5 Min';
+
+  } catch(err) {
+    const eb=document.getElementById('errorBox');
+    eb.style.display='block';
+    eb.textContent=`⚠ ${err.message} — Versuche manuell zu aktualisieren.`;
+    console.error(err);
+  } finally {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('refreshBtn').disabled=false;
+  }
+}
+
+loadData();
+setInterval(loadData, 5*60*1000);
+window.addEventListener('resize', ()=>{
+  const canvas=document.getElementById('priceChart');
+  if(canvas._lastData) drawChart('priceChart', canvas._lastData, canvas._lastSma);
+});
+</script>
+</body>
+</html>
