@@ -106,6 +106,8 @@ body { background:#0a0c10; color:#c8d4e8; font-family:Arial,sans-serif; padding:
 .ki-analyse { font-size:12px; line-height:1.8; color:#c8d4e8; background:#0a0c10; border-radius:8px; padding:12px; margin-top:8px; border-left:3px solid #3d7fff; }
 .ki-btn { background:rgba(61,127,255,.15); border:1px solid #3d7fff; color:#3d7fff; padding:6px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
 .ki-btn:hover { background:#3d7fff; color:#fff; }
+.quick-btn { background:#0a0c10; border:1px solid #1e2530; color:#3a4455; padding:4px 10px; border-radius:20px; font-size:11px; cursor:pointer; }
+.quick-btn:hover { border-color:#3d7fff; color:#3d7fff; }
 
 /* Levels */
 .levels { background:#111418; border:1px solid #1e2530; border-radius:10px; padding:14px; margin-bottom:10px; }
@@ -159,19 +161,56 @@ body { background:#0a0c10; color:#c8d4e8; font-family:Arial,sans-serif; padding:
   <div class="tab" id="tab-gas" onclick="switchInstrument('gas')">
     <div class="tab-name">Erdgas</div>
     <div class="tab-price" id="tab-price-gas">—</div>
-    <div class="tab-chg"   id="tab-chg-gas">—</div>
+    <div class="tab-chg"   id="tab-chg-gas">manuell</div>
+  </div>
+</div>
+
+<!-- Manual Input (shown for gas) -->
+<div id="manualInputCard" style="display:block;background:#111418;border:1px solid #f0b429;border-radius:10px;padding:14px;margin-bottom:10px;">
+  <div style="font-size:10px;color:#f0b429;letter-spacing:1px;margin-bottom:8px;">✏️ KURSEINGABE (von Plus500)</div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <input id="manualPrice" type="number" step="0.0001" placeholder="Kurs von Plus500 eingeben..."
+      style="flex:1;background:#0a0c10;border:1px solid #1e2530;border-radius:6px;padding:10px;color:#e8f0ff;font-size:18px;font-family:monospace;outline:none;width:100%;"
+      onkeydown="if(event.key==='Enter')applyManualPrice()"/>
+    <button onclick="applyManualPrice()" id="calcBtn" style="background:#f0b429;color:#000;border:none;padding:10px 16px;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;white-space:nowrap;">✓ Berechnen</button>
+  </div>
+  <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-size:11px;">
+    <span style="color:#3a4455;">Letzter Wert: <span id="lastManualPrice" style="color:#f0b429">—</span> · <span id="lastManualTime" style="color:#3a4455">—</span></span>
+    <span id="dataPointsBadge" style="color:#3d7fff;background:rgba(61,127,255,.1);padding:2px 8px;border-radius:10px;">0 Punkte</span>
   </div>
 </div>
 
 <div id="mainContent"><div class="loading"><div class="spin"></div><br><br>Lade Daten...</div></div>
 
-<!-- KI Prognose -->
+<!-- KI Chat -->
 <div class="ki-card">
   <div class="ki-title">
-    <span>🤖 KI TREND-PROGNOSE (Claude AI)</span>
-    <button class="ki-btn" id="kiBtn" onclick="loadKI()">Prognose laden</button>
+    <span>🤖 KI ANALYSE (Claude AI)</span>
+    <button class="ki-btn" id="kiBtn" onclick="loadKI()">Auto-Analyse</button>
   </div>
-  <div id="kiContent"><div style="font-size:12px;color:#3a4455;text-align:center;padding:10px;">Klicke "Prognose laden" für KI-Analyse</div></div>
+  <div id="kiContent"><div style="font-size:12px;color:#3a4455;text-align:center;padding:10px;">Klicke "Auto-Analyse" oder stelle eine Frage unten</div></div>
+  <div style="margin-top:10px;display:flex;gap:8px;">
+    <input id="kiQuestion" type="text" placeholder="z.B. Ist jetzt ein guter Zeitpunkt zum Kaufen?" 
+      style="flex:1;background:#0a0c10;border:1px solid #1e2530;border-radius:6px;padding:8px 10px;color:#e8f0ff;font-size:12px;outline:none;"
+      onkeydown="if(event.key==='Enter')askClaude()"/>
+    <button onclick="askClaude()" style="background:#3d7fff;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">Fragen ➤</button>
+  </div>
+  <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+    <button onclick="quickAsk('Ist jetzt ein guter Einstiegszeitpunkt?')" class="quick-btn">Jetzt einsteigen?</button>
+    <button onclick="quickAsk('Wie ist der aktuelle Trend?')" class="quick-btn">Trend?</button>
+    <button onclick="quickAsk('Wo sind gute Stop-Loss Levels?')" class="quick-btn">Stop-Loss?</button>
+    <button onclick="quickAsk('Was sind die Risiken?')" class="quick-btn">Risiken?</button>
+  </div>
+</div>
+
+<!-- Rating History -->
+<div style="background:#111418;border:1px solid #1e2530;border-radius:10px;padding:14px;margin-bottom:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+    <span style="font-size:10px;color:#3a4455;letter-spacing:1px;">📊 PROGNOSE BEWERTUNG — HILF DEM ALGORITHMUS ZU LERNEN</span>
+    <span id="accuracyBadge" style="font-size:11px;color:#3d7fff;">Noch keine Bewertungen</span>
+  </div>
+  <div id="ratingHistory"></div>
+  <div style="margin-top:8px;font-size:11px;color:#3a4455;">👍 = Prognose war richtig &nbsp;·&nbsp; 👎 = Prognose war falsch &nbsp;·&nbsp; Der Algorithmus lernt aus deinen Bewertungen!</div>
 </div>
 
 <div class="footer">
@@ -342,7 +381,108 @@ function updateEntry(a, label) {
 }
 
 // ── KI Prognose ───────────────────────────────────────────────────────────
+function quickAsk(q) {
+  document.getElementById('kiQuestion').value = q;
+  askClaude();
+}
+
+async function askClaude() {
+  const question = document.getElementById('kiQuestion').value.trim();
+  await runKI(question || null);
+}
+
 async function loadKI() {
+  await runKI(null);
+}
+
+async function runKI(userQuestion) {
+  const a = data[currentInstrument];
+  if(!a) return;
+  const label = currentInstrument==='usdchf'?'USD/CHF':'Erdgas';
+  const dec   = currentInstrument==='usdchf'?4:3;
+
+  let key = localStorage.getItem('anthropic_key');
+  if(!key) {
+    key = prompt('Anthropic API Key eingeben (sk-ant-...):');
+    if(key && key.startsWith('sk-')) localStorage.setItem('anthropic_key', key);
+    else return;
+  }
+
+  document.getElementById('kiContent').innerHTML=`<div class="ki-loading"><span class="ki-spin"></span>Claude analysiert...</div>`;
+  document.getElementById('kiBtn').disabled=true;
+
+  const marktdaten = `Aktuelle ${label} Marktdaten:
+- Kurs: ${a.last.toFixed(dec)} (${((a.last-a.prev)/a.prev*100).toFixed(2)}% heute)
+- RSI(14): ${a.rsiL.toFixed(1)} ${a.rsiL<30?'(ÜBERVERKAUFT)':a.rsiL>70?'(ÜBERKAUFT)':'(neutral)'}
+- MACD: ${a.macdL>a.macdSL?'bullisch':'bärisch'} (${a.macdL.toFixed(5)} vs ${a.macdSL.toFixed(5)})
+- SMA20: ${a.sma20L?a.sma20L.toFixed(dec):'—'} / SMA50: ${a.sma50L?a.sma50L.toFixed(dec):'—'}
+- Kurs ${a.sma20L&&a.last>a.sma20L?'ÜBER':'UNTER'} SMA20, ${a.sma50L&&a.last>a.sma50L?'ÜBER':'UNTER'} SMA50
+- Bollinger %B: ${a.bbL!=null?(a.bbL*100).toFixed(1)+'%':'—'} ${a.bbL>0.8?'(AM OBEREN BAND!)':a.bbL<0.2?'(AM UNTEREN BAND!)':''}
+- Stochastic: ${a.stochL!=null?a.stochL.toFixed(1):'—'}
+- EMA9/21: ${a.ema9L>a.ema21L?'bullisch (EMA9 über EMA21)':'bärisch (EMA9 unter EMA21)'}
+- 7T Trend: ${a.trend7>=0?'+':''}${a.trend7.toFixed(dec)}
+- Signal: ${a.sig} (${a.buyC}× Kauf, ${a.selC}× Verkauf)
+- Support: ${a.loR.toFixed(dec)} / Widerstand: ${a.hiR.toFixed(dec)}`;
+
+  const systemPrompt = `Du bist ein erfahrener Forex/Trading-Analyst der einem Anfänger hilft. 
+Antworte immer auf Deutsch, klar und verständlich ohne Fachjargon.
+Gib konkrete Empfehlungen mit Kurszahlen.
+Strukturiere deine Antwort mit Emojis für bessere Lesbarkeit.
+Maximum 200 Wörter.`;
+
+  const userPrompt = userQuestion 
+    ? `${marktdaten}
+
+Frage des Traders: ${userQuestion}`
+    : `${marktdaten}
+
+Gib mir eine vollständige Analyse mit:
+1. Aktuelle Marktsituation
+2. Prognose für 4H, 24H und 3 Tage
+3. Klare Empfehlung: KAUFEN / VERKAUFEN / ABWARTEN
+4. Konkrete Kurslevels`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:600,
+        system: systemPrompt,
+        messages:[{role:'user',content:userPrompt}]
+      })
+    });
+
+    if(!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || 'API Fehler '+res.status);
+    }
+
+    const json = await res.json();
+    const text = json.content[0].text;
+
+    document.getElementById('kiContent').innerHTML=`
+      <div class="ki-analyse" style="white-space:pre-wrap;">${text}</div>
+      <div style="font-size:10px;color:#3a4455;margin-top:8px;text-align:center;">⚠ KI-Analyse — keine Finanzberatung. Eigenes Urteil verwenden.</div>
+    `;
+  } catch(e) {
+    if(e.message.includes('401')) {
+      localStorage.removeItem('anthropic_key');
+      document.getElementById('kiContent').innerHTML=`<div style="color:#ff4d6d;font-size:12px;padding:10px;">⚠ API Key ungültig — wird beim nächsten Klick neu abgefragt.</div>`;
+    } else {
+      document.getElementById('kiContent').innerHTML=`<div style="color:#ff4d6d;font-size:12px;padding:10px;">⚠ Fehler: ${e.message}</div>`;
+    }
+  }
+  document.getElementById('kiBtn').disabled=false;
+}
+
+async function loadKI_OLD() {
   const a = data[currentInstrument];
   if(!a) return;
   const label = currentInstrument==='usdchf'?'USD/CHF':'Erdgas (Natural Gas)';
@@ -451,10 +591,184 @@ function simHistory(rate, days=90, vol=0.003) {
   p.push(rate); return p;
 }
 
+// ── Prognosis Rating System ───────────────────────────────────────────────
+function savePendingPrognosis(id, price, analysis) {
+  if(!analysis) return;
+  const pending = {
+    id, price, sig: analysis.sig, cls: analysis.cls,
+    rsi: analysis.rsiL, score: analysis.score,
+    time: Date.now(), rated: false
+  };
+  let history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
+  history.unshift(pending);
+  if(history.length > 50) history = history.slice(0,50);
+  localStorage.setItem('prognosis_history', JSON.stringify(history));
+  renderRatingHistory();
+}
+
+function ratePrognosis(idx, good) {
+  let history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
+  if(!history[idx]) return;
+  history[idx].rated = true;
+  history[idx].good = good;
+  history[idx].ratedTime = Date.now();
+  localStorage.setItem('prognosis_history', JSON.stringify(history));
+
+  // Update algo weights based on rating
+  updateAlgoWeights(history[idx], good);
+  renderRatingHistory();
+}
+
+function updateAlgoWeights(entry, good) {
+  let weights = JSON.parse(localStorage.getItem('algo_weights')||'{}');
+  const defaultW = {rsi:1,macd:1,sma20:1,sma50:1,bb:1,stoch:1,ema:1,trend:1};
+  weights = {...defaultW,...weights};
+
+  // Adjust: if signal was correct, increase weights of contributing indicators
+  const delta = good ? 0.05 : -0.05;
+  if(entry.rsi < 35 || entry.rsi > 65) weights.rsi = Math.max(0.3, Math.min(2, weights.rsi + delta));
+  if(Math.abs(entry.score) > 0.3) {
+    weights.macd = Math.max(0.3, Math.min(2, weights.macd + delta));
+    weights.ema  = Math.max(0.3, Math.min(2, weights.ema  + delta));
+  }
+  localStorage.setItem('algo_weights', JSON.stringify(weights));
+
+  // Show accuracy
+  const history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
+  const rated = history.filter(h=>h.rated);
+  const correct = rated.filter(h=>h.good).length;
+  if(rated.length > 0) {
+    const acc = Math.round(correct/rated.length*100);
+    const badge = document.getElementById('accuracyBadge');
+    if(badge) {
+      badge.textContent = `Trefferquote: ${acc}% (${correct}/${rated.length})`;
+      badge.style.color = acc>=60?'#00e5a0':acc>=40?'#f0b429':'#ff4d6d';
+    }
+  }
+}
+
+function renderRatingHistory() {
+  const el = document.getElementById('ratingHistory');
+  if(!el) return;
+  const history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
+  if(history.length===0) {
+    el.innerHTML='<div style="color:#3a4455;font-size:12px;text-align:center;padding:10px;">Noch keine Prognosen — gib Kurse ein um Signale zu erhalten</div>';
+    return;
+  }
+  el.innerHTML = history.slice(0,8).map((h,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1e2530;font-size:12px;">
+      <span style="color:#3a4455;min-width:45px;">${new Date(h.time).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'})}</span>
+      <span style="font-family:monospace;min-width:55px;">${h.price.toFixed(h.id==='gas'?3:4)}</span>
+      <span class="badge ${h.cls}" style="min-width:45px;text-align:center;">${h.sig}</span>
+      <span style="flex:1;color:#3a4455;font-size:11px;">${h.id.toUpperCase()}</span>
+      ${h.rated
+        ? `<span style="font-size:16px;">${h.good?'👍':'👎'}</span>`
+        : `<button onclick="ratePrognosis(${i},true)"  style="background:rgba(0,229,160,.15);border:1px solid #00e5a0;color:#00e5a0;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:14px;">👍</button>
+           <button onclick="ratePrognosis(${i},false)" style="background:rgba(255,77,109,.15);border:1px solid #ff4d6d;color:#ff4d6d;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:14px;margin-left:4px;">👎</button>`
+      }
+    </div>`).join('');
+}
+
+// ── Manual Price ──────────────────────────────────────────────────────────
+function setQuickPrice(p) {
+  document.getElementById('manualPrice').value = p;
+  applyManualPrice();
+}
+
+function applyManualPrice() {
+  const val = parseFloat(document.getElementById('manualPrice').value);
+  if(!val || val <= 0) { alert('Bitte gültigen Kurs eingeben'); return; }
+
+  const id = currentInstrument;
+  const storageKey = id + '_history';
+  const isGas = id === 'gas';
+  const dec = isGas ? 3 : 4;
+  const vol = isGas ? 0.015 : 0.003;
+
+  // Load & update history
+  let hist = JSON.parse(localStorage.getItem(storageKey) || '[]');
+  hist.push({price: val, time: Date.now(), signal: data[id]?.sig || null});
+  if(hist.length > 200) hist = hist.slice(-200);
+  localStorage.setItem(storageKey, JSON.stringify(hist));
+
+  // Build closes
+  let closes;
+  if(hist.length >= 20) {
+    closes = hist.map(h => h.price);
+  } else {
+    const simBase = simHistory(val, 90 - hist.length, vol);
+    closes = [...simBase, ...hist.map(h => h.price)];
+  }
+
+  data[id] = analyze(closes);
+  const chg = hist.length > 1 ? val - hist[hist.length-2].price : 0;
+  const chgP = hist.length > 1 ? (chg / hist[hist.length-2].price * 100) : 0;
+
+  // Update tab
+  const prefix = isGas ? '$' : '';
+  document.getElementById('tab-price-'+id).textContent = prefix + val.toFixed(dec);
+  document.getElementById('tab-chg-'+id).innerHTML = hist.length > 1
+    ? `<span class="${chg>=0?'up':'down'}">${chg>=0?'+':''}${chgP.toFixed(2)}%</span>`
+    : '<span style="color:#3a4455">1. Eingabe</span>';
+
+  // Update UI
+  document.getElementById('lastManualPrice').textContent = prefix + val.toFixed(dec);
+  document.getElementById('lastManualTime').textContent = new Date().toLocaleTimeString('de-CH');
+  document.getElementById('dataPointsBadge').textContent = hist.length + ' Punkte';
+  document.getElementById('dataPointsBadge').style.color = hist.length >= 20 ? '#00e5a0' : '#3d7fff';
+
+  renderInstrument(id);
+
+  // Save prognosis for later rating
+  savePendingPrognosis(id, val, data[id]);
+
+  // Flash
+  const btn = document.getElementById('calcBtn');
+  btn.textContent = '✓ Berechnet!';
+  btn.style.background = '#00e5a0';
+  setTimeout(() => { btn.textContent = '✓ Berechnen'; btn.style.background = '#f0b429'; }, 1500);
+}
+
+function loadFromStorage(id) {
+  const isGas = id === 'gas';
+  const dec = isGas ? 3 : 4;
+  const vol = isGas ? 0.015 : 0.003;
+  const prefix = isGas ? '$' : '';
+  const hist = JSON.parse(localStorage.getItem(id+'_history') || '[]');
+  if(hist.length === 0) return false;
+
+  const prices = hist.map(h=>h.price);
+  let closes;
+  if(hist.length >= 20) {
+    closes = prices;
+  } else {
+    const simBase = simHistory(prices[prices.length-1], 90-hist.length, vol);
+    closes = [...simBase, ...prices];
+  }
+
+  data[id] = analyze(closes);
+  const last = prices[prices.length-1];
+  const prev = prices.length > 1 ? prices[prices.length-2] : last;
+  const chg = last-prev, chgP=(chg/prev)*100;
+
+  document.getElementById('tab-price-'+id).textContent = prefix+last.toFixed(dec);
+  document.getElementById('tab-chg-'+id).innerHTML = `<span class="${chg>=0?'up':'down'}">${chg>=0?'+':''}${chgP.toFixed(2)}%</span>`;
+
+  if(currentInstrument === id) {
+    document.getElementById('manualPrice').value = last.toFixed(dec);
+    document.getElementById('lastManualPrice').textContent = prefix+last.toFixed(dec);
+    document.getElementById('lastManualTime').textContent = new Date(hist[hist.length-1].time).toLocaleTimeString('de-CH')+' (gespeichert)';
+    document.getElementById('dataPointsBadge').textContent = hist.length+' Punkte';
+    document.getElementById('dataPointsBadge').style.color = hist.length>=20?'#00e5a0':'#3d7fff';
+  }
+  return true;
+}
+function loadGasFromStorage() { return loadFromStorage('gas'); }
+
 async function loadAll() {
   document.getElementById('mainContent').innerHTML='<div class="loading"><div class="spin"></div><br><br>Lade Daten...</div>';
 
-  // USD/CHF
+  // USD/CHF - try API first, then storage, then empty
   try {
     const apis=[
       ()=>fetch('https://api.frankfurter.app/latest?from=USD&to=CHF').then(r=>r.json()).then(j=>j.rates.CHF),
@@ -465,6 +779,7 @@ async function loadAll() {
       try{rate=await Promise.race([api(),new Promise((_,r)=>setTimeout(()=>r(new Error('t')),5000))]);if(rate>0)break;}catch(e){}
     }
     if(!rate) throw new Error('no rate');
+    // Merge with manual history if exists
     let hist=null;
     try{
       const end=new Date(),start=new Date();start.setDate(end.getDate()-90);
@@ -475,20 +790,24 @@ async function loadAll() {
     }catch(e){}
     if(!hist) hist=simHistory(rate);
     else hist.push(rate);
+    // Add manual entries on top
+    const manualHist = JSON.parse(localStorage.getItem('usdchf_history')||'[]');
+    if(manualHist.length>0) hist=[...hist,...manualHist.map(h=>h.price)];
     data.usdchf=analyze(hist);
     const a=data.usdchf;
     const chg=a.last-a.prev,chgP=(chg/a.prev)*100;
     document.getElementById('tab-price-usdchf').textContent=a.last.toFixed(4);
     document.getElementById('tab-chg-usdchf').innerHTML=`<span class="${chg>=0?'up':'down'}">${chg>=0?'+':''}${chgP.toFixed(2)}%</span>`;
-  } catch(e){ data.usdchf=null; }
+  } catch(e){
+    // Fallback to manual storage
+    if(!loadFromStorage('usdchf')) data.usdchf=null;
+  }
 
-  // Erdgas simulation
-  const gasRate=2.8+(Math.random()-.5)*0.6;
-  data.gas=analyze(simHistory(gasRate,90,0.018));
-  const ga=data.gas;
-  const gchg=ga.last-ga.prev,gchgP=(gchg/ga.prev)*100;
-  document.getElementById('tab-price-gas').textContent='$'+ga.last.toFixed(3);
-  document.getElementById('tab-chg-gas').innerHTML=`<span class="${gchg>=0?'up':'down'}">${gchg>=0?'+':''}${gchgP.toFixed(2)}%</span>`;
+  // Erdgas - from localStorage or show empty
+  if(!loadGasFromStorage()) {
+    document.getElementById('tab-price-gas').textContent='—';
+    document.getElementById('tab-chg-gas').innerHTML='<span style="color:#f0b429">Eingabe nötig</span>';
+  }
 
   document.getElementById('lastUpdate').textContent='🕐 '+new Date().toLocaleTimeString('de-CH')+' · Auto 5 Min';
   renderInstrument(currentInstrument);
@@ -498,9 +817,10 @@ function switchInstrument(id) {
   currentInstrument=id;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
+  // Show/hide manual input
+  document.getElementById('manualInputCard').style.display = 'block';
   renderInstrument(id);
-  // Reset KI
-  document.getElementById('kiContent').innerHTML='<div style="font-size:12px;color:#3a4455;text-align:center;padding:10px;">Klicke "Prognose laden" für KI-Analyse</div>';
+  document.getElementById('kiContent').innerHTML='<div style="font-size:12px;color:#3a4455;text-align:center;padding:10px;">Klicke "Auto-Analyse" oder stelle eine Frage</div>';
 }
 
 function renderInstrument(id) {
@@ -508,7 +828,17 @@ function renderInstrument(id) {
   const label=id==='usdchf'?'USD/CHF':'Erdgas';
   const dec=id==='usdchf'?4:3;
   const unit=id==='gas'?' USD/MMBtu':'';
-  if(!a){document.getElementById('mainContent').innerHTML=`<div class="loading" style="color:#ff4d6d;">⚠ ${label} nicht verfügbar</div>`;return;}
+  if(!a){
+    document.getElementById('mainContent').innerHTML=`
+      <div style="text-align:center;padding:30px;background:#111418;border-radius:10px;border:1px solid #f0b429;">
+        <div style="font-size:32px;margin-bottom:10px;">✏️</div>
+        <div style="font-size:16px;color:#f0b429;margin-bottom:8px;">Kurs eingeben</div>
+        <div style="font-size:13px;color:#3a4455;line-height:1.6;">Schaue auf Plus500 nach dem aktuellen Erdgas-Kurs<br>und gib ihn oben ein.<br><br>
+        Je mehr Kurse du eingibst, desto genauer werden<br>die Signale und Indikatoren!</div>
+        <div id="historyInfo" style="margin-top:12px;font-size:12px;color:#3d7fff;">0 Datenpunkte gespeichert</div>
+      </div>`;
+    return;
+  }
 
   updateEntry(a,label);
   updateAmpel(a,label);
@@ -540,6 +870,7 @@ function renderInstrument(id) {
       <div class="bar-row"><span class="bar-lbl" style="color:#f0b429">HOLD</span><div class="bar-track"><div class="bar-fill hold" style="width:${a.holC/a.total*100}%"></div></div><span class="bar-num">${a.holC}/${a.total}</span></div>
     </div>
 
+    <div id="historyInfo" style="font-size:11px;color:#3d7fff;text-align:center;margin-bottom:6px;" ></div>
     <div class="ind-grid">
       ${ind('RSI (14)',a.rsiL.toFixed(1),a.sigs.rsi)}
       ${ind('MACD',a.macdL.toFixed(5),a.sigs.macd)}
@@ -562,6 +893,7 @@ function renderInstrument(id) {
 
 loadAll();
 setInterval(loadAll,5*60*1000);
+setTimeout(renderRatingHistory, 500);
 </script>
 </body>
 </html>
