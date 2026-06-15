@@ -203,14 +203,28 @@ body { background:#0a0c10; color:#c8d4e8; font-family:Arial,sans-serif; padding:
   </div>
 </div>
 
-<!-- Rating History -->
-<div style="background:#111418;border:1px solid #1e2530;border-radius:10px;padding:14px;margin-bottom:10px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-    <span style="font-size:10px;color:#3a4455;letter-spacing:1px;">📊 PROGNOSE BEWERTUNG — HILF DEM ALGORITHMUS ZU LERNEN</span>
+<!-- Zeitfenster Prognose -->
+<div style="background:#111418;border:1px solid #3d7fff;border-radius:10px;padding:14px;margin-bottom:10px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <span style="font-size:10px;color:#3d7fff;letter-spacing:1px;">🕐 ZEITFENSTER-PROGNOSEN</span>
     <span id="accuracyBadge" style="font-size:11px;color:#3d7fff;">Noch keine Bewertungen</span>
   </div>
+
+  <!-- Current session -->
+  <div id="currentSession" style="background:#0a0c10;border-radius:8px;padding:12px;margin-bottom:10px;">
+    <div style="font-size:11px;color:#3a4455;margin-bottom:8px;">AKTUELLE SESSION</div>
+    <div id="sessionContent">Gib einen Kurs ein um die aktuelle Session-Prognose zu sehen</div>
+  </div>
+
+  <!-- Session history -->
+  <div style="font-size:10px;color:#3a4455;letter-spacing:1px;margin-bottom:8px;">VERGANGENE PROGNOSEN</div>
   <div id="ratingHistory"></div>
-  <div style="margin-top:8px;font-size:11px;color:#3a4455;">👍 = Prognose war richtig &nbsp;·&nbsp; 👎 = Prognose war falsch &nbsp;·&nbsp; Der Algorithmus lernt aus deinen Bewertungen!</div>
+  <div style="margin-top:10px;font-size:11px;color:#3a4455;line-height:1.8;">
+    🌙 22:00 Prognose → bewerten um 06:00<br>
+    🌅 06:00 Prognose → bewerten um 12:00<br>
+    ☀️ 12:00 Prognose → bewerten um 18:00<br>
+    🌆 18:00 Prognose → bewerten um 22:00
+  </div>
 </div>
 
 <div class="footer">
@@ -591,18 +605,130 @@ function simHistory(rate, days=90, vol=0.003) {
   p.push(rate); return p;
 }
 
-// ── Prognosis Rating System ───────────────────────────────────────────────
+// ── Session System ────────────────────────────────────────────────────────
+// Sessions: 22:00→06:00, 06:00→12:00, 12:00→18:00, 18:00→22:00
+const SESSIONS = [
+  { name:'🌙 Nacht',   start:22, end:6,  icon:'🌙', label:'22:00 – 06:00' },
+  { name:'🌅 Morgen',  start:6,  end:12, icon:'🌅', label:'06:00 – 12:00' },
+  { name:'☀️ Mittag',  start:12, end:18, icon:'☀️', label:'12:00 – 18:00' },
+  { name:'🌆 Abend',   start:18, end:22, icon:'🌆', label:'18:00 – 22:00' },
+];
+
+function getCurrentSession() {
+  const h = new Date().getHours();
+  if(h >= 22 || h < 6)  return SESSIONS[0];
+  if(h >= 6  && h < 12) return SESSIONS[1];
+  if(h >= 12 && h < 18) return SESSIONS[2];
+  return SESSIONS[3];
+}
+
+function getNextSession(sess) {
+  const idx = SESSIONS.indexOf(sess);
+  return SESSIONS[(idx+1) % SESSIONS.length];
+}
+
+function getSessionKey(sess, id) {
+  const d = new Date();
+  // For night session spanning midnight, use previous day
+  const dateStr = d.toISOString().split('T')[0];
+  return `sess_${id}_${sess.start}_${dateStr}`;
+}
+
 function savePendingPrognosis(id, price, analysis) {
   if(!analysis) return;
-  const pending = {
-    id, price, sig: analysis.sig, cls: analysis.cls,
-    rsi: analysis.rsiL, score: analysis.score,
-    time: Date.now(), rated: false
+  const sess = getCurrentSession();
+  const key = getSessionKey(sess, id);
+  const existing = JSON.parse(localStorage.getItem(key)||'null');
+
+  const entry = {
+    id, price,
+    sig: analysis.sig, cls: analysis.cls,
+    rsi: analysis.rsiL.toFixed(1),
+    score: analysis.score,
+    session: sess.name,
+    sessionLabel: sess.label,
+    nextSession: getNextSession(sess).label,
+    time: Date.now(),
+    rated: existing?.rated || false,
+    good:  existing?.good,
   };
+
+  localStorage.setItem(key, JSON.stringify(entry));
+
+  // Also keep global history
   let history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
-  history.unshift(pending);
-  if(history.length > 50) history = history.slice(0,50);
+  // Update or add
+  const existIdx = history.findIndex(h=>h.sessionKey===key);
+  if(existIdx>=0) { history[existIdx] = {...entry, sessionKey:key}; }
+  else { history.unshift({...entry, sessionKey:key}); }
+  if(history.length>40) history=history.slice(0,40);
   localStorage.setItem('prognosis_history', JSON.stringify(history));
+
+  renderSessionCard(entry, sess);
+  renderRatingHistory();
+}
+
+function renderSessionCard(entry, sess) {
+  const next = getNextSession(sess);
+  const clsColor = entry.cls==='buy'?'#00e5a0':entry.cls==='sell'?'#ff4d6d':'#f0b429';
+  const dec = entry.id==='gas'?3:4;
+  const prefix = entry.id==='gas'?'$':'';
+
+  document.getElementById('sessionContent').innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <span style="font-size:28px;">${sess.icon}</span>
+      <div>
+        <div style="font-size:13px;color:#e8f0ff;font-weight:bold;">${sess.name} Session · ${sess.label}</div>
+        <div style="font-size:11px;color:#3a4455;">Bewertung möglich ab: ${next.label.split('–')[0].trim()} Uhr</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="flex:1;background:#111418;border-radius:6px;padding:8px;text-align:center;min-width:80px;">
+        <div style="font-size:10px;color:#3a4455;margin-bottom:4px;">KURS</div>
+        <div style="font-size:16px;font-family:monospace;color:#e8f0ff;">${prefix}${entry.price.toFixed(dec)}</div>
+      </div>
+      <div style="flex:1;background:#111418;border-radius:6px;padding:8px;text-align:center;border:1px solid ${clsColor};min-width:80px;">
+        <div style="font-size:10px;color:#3a4455;margin-bottom:4px;">SIGNAL</div>
+        <div style="font-size:18px;font-weight:bold;font-family:monospace;color:${clsColor};">${entry.sig}</div>
+      </div>
+      <div style="flex:1;background:#111418;border-radius:6px;padding:8px;text-align:center;min-width:80px;">
+        <div style="font-size:10px;color:#3a4455;margin-bottom:4px;">RSI</div>
+        <div style="font-size:16px;font-family:monospace;color:#e8f0ff;">${entry.rsi}</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#3a4455;margin-bottom:8px;">
+      Trifft die ${entry.sig} Prognose um ${next.label.split('–')[0].trim()} Uhr ein?
+    </div>
+    ${entry.rated
+      ? `<div style="text-align:center;font-size:24px;padding:8px;">${entry.good?'👍 Richtig!':'👎 Falsch'}</div>`
+      : `<div style="display:flex;gap:10px;">
+          <button onclick="rateCurrentSession(true)" style="flex:1;background:rgba(0,229,160,.15);border:2px solid #00e5a0;color:#00e5a0;border-radius:8px;padding:12px;cursor:pointer;font-size:20px;">👍<br><span style="font-size:11px;">Prognose richtig</span></button>
+          <button onclick="rateCurrentSession(false)" style="flex:1;background:rgba(255,77,109,.15);border:2px solid #ff4d6d;color:#ff4d6d;border-radius:8px;padding:12px;cursor:pointer;font-size:20px;">👎<br><span style="font-size:11px;">Prognose falsch</span></button>
+        </div>`
+    }
+  `;
+}
+
+function rateCurrentSession(good) {
+  const sess = getCurrentSession();
+  const id = currentInstrument;
+  const key = getSessionKey(sess, id);
+  let entry = JSON.parse(localStorage.getItem(key)||'null');
+  if(!entry) return;
+
+  entry.rated = true;
+  entry.good = good;
+  entry.ratedTime = Date.now();
+  localStorage.setItem(key, JSON.stringify(entry));
+
+  // Update history
+  let history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
+  const idx = history.findIndex(h=>h.sessionKey===key);
+  if(idx>=0) { history[idx].rated=true; history[idx].good=good; }
+  localStorage.setItem('prognosis_history', JSON.stringify(history));
+
+  updateAlgoWeights(entry, good);
+  renderSessionCard(entry, sess);
   renderRatingHistory();
 }
 
@@ -613,58 +739,57 @@ function ratePrognosis(idx, good) {
   history[idx].good = good;
   history[idx].ratedTime = Date.now();
   localStorage.setItem('prognosis_history', JSON.stringify(history));
-
-  // Update algo weights based on rating
   updateAlgoWeights(history[idx], good);
   renderRatingHistory();
 }
 
 function updateAlgoWeights(entry, good) {
   let weights = JSON.parse(localStorage.getItem('algo_weights')||'{}');
-  const defaultW = {rsi:1,macd:1,sma20:1,sma50:1,bb:1,stoch:1,ema:1,trend:1};
-  weights = {...defaultW,...weights};
-
-  // Adjust: if signal was correct, increase weights of contributing indicators
+  const dw = {rsi:1,macd:1,sma20:1,sma50:1,bb:1,stoch:1,ema:1};
+  weights = {...dw,...weights};
   const delta = good ? 0.05 : -0.05;
-  if(entry.rsi < 35 || entry.rsi > 65) weights.rsi = Math.max(0.3, Math.min(2, weights.rsi + delta));
-  if(Math.abs(entry.score) > 0.3) {
-    weights.macd = Math.max(0.3, Math.min(2, weights.macd + delta));
-    weights.ema  = Math.max(0.3, Math.min(2, weights.ema  + delta));
+  const rsi = parseFloat(entry.rsi);
+  if(rsi<35||rsi>65) weights.rsi=Math.max(0.3,Math.min(2,weights.rsi+delta));
+  if(Math.abs(entry.score)>0.3){
+    weights.macd=Math.max(0.3,Math.min(2,weights.macd+delta));
+    weights.ema=Math.max(0.3,Math.min(2,weights.ema+delta));
   }
   localStorage.setItem('algo_weights', JSON.stringify(weights));
 
-  // Show accuracy
   const history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
   const rated = history.filter(h=>h.rated);
   const correct = rated.filter(h=>h.good).length;
-  if(rated.length > 0) {
-    const acc = Math.round(correct/rated.length*100);
-    const badge = document.getElementById('accuracyBadge');
-    if(badge) {
-      badge.textContent = `Trefferquote: ${acc}% (${correct}/${rated.length})`;
-      badge.style.color = acc>=60?'#00e5a0':acc>=40?'#f0b429':'#ff4d6d';
+  if(rated.length>0){
+    const acc=Math.round(correct/rated.length*100);
+    const badge=document.getElementById('accuracyBadge');
+    if(badge){
+      badge.textContent=`Trefferquote: ${acc}% (${correct}/${rated.length})`;
+      badge.style.color=acc>=60?'#00e5a0':acc>=40?'#f0b429':'#ff4d6d';
     }
   }
 }
 
 function renderRatingHistory() {
-  const el = document.getElementById('ratingHistory');
+  const el=document.getElementById('ratingHistory');
   if(!el) return;
-  const history = JSON.parse(localStorage.getItem('prognosis_history')||'[]');
-  if(history.length===0) {
-    el.innerHTML='<div style="color:#3a4455;font-size:12px;text-align:center;padding:10px;">Noch keine Prognosen — gib Kurse ein um Signale zu erhalten</div>';
+  const history=JSON.parse(localStorage.getItem('prognosis_history')||'[]');
+  if(history.length===0){
+    el.innerHTML='<div style="color:#3a4455;font-size:12px;padding:8px 0;">Noch keine Prognosen gespeichert</div>';
     return;
   }
-  el.innerHTML = history.slice(0,8).map((h,i)=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #1e2530;font-size:12px;">
-      <span style="color:#3a4455;min-width:45px;">${new Date(h.time).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'})}</span>
-      <span style="font-family:monospace;min-width:55px;">${h.price.toFixed(h.id==='gas'?3:4)}</span>
-      <span class="badge ${h.cls}" style="min-width:45px;text-align:center;">${h.sig}</span>
-      <span style="flex:1;color:#3a4455;font-size:11px;">${h.id.toUpperCase()}</span>
+  const dec = h => h.id==='gas'?3:4;
+  const prefix = h => h.id==='gas'?'$':'';
+  el.innerHTML=history.slice(0,6).map((h,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #1e2530;font-size:12px;">
+      <span style="font-size:14px;min-width:24px;">${h.session?.split(' ')[0]||'📊'}</span>
+      <div style="flex:1;">
+        <div style="color:#c8d4e8;">${h.sessionLabel||'—'} · ${h.id?.toUpperCase()}</div>
+        <div style="color:#3a4455;font-size:11px;">${prefix(h)}${h.price?.toFixed(dec(h))||'—'} · ${h.sig} Signal</div>
+      </div>
       ${h.rated
-        ? `<span style="font-size:16px;">${h.good?'👍':'👎'}</span>`
-        : `<button onclick="ratePrognosis(${i},true)"  style="background:rgba(0,229,160,.15);border:1px solid #00e5a0;color:#00e5a0;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:14px;">👍</button>
-           <button onclick="ratePrognosis(${i},false)" style="background:rgba(255,77,109,.15);border:1px solid #ff4d6d;color:#ff4d6d;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:14px;margin-left:4px;">👎</button>`
+        ? `<span style="font-size:18px;">${h.good?'👍':'👎'}</span>`
+        : `<button onclick="ratePrognosis(${i},true)"  style="background:rgba(0,229,160,.15);border:1px solid #00e5a0;color:#00e5a0;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;">👍</button>
+           <button onclick="ratePrognosis(${i},false)" style="background:rgba(255,77,109,.15);border:1px solid #ff4d6d;color:#ff4d6d;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;margin-left:4px;">👎</button>`
       }
     </div>`).join('');
 }
@@ -893,7 +1018,15 @@ function renderInstrument(id) {
 
 loadAll();
 setInterval(loadAll,5*60*1000);
-setTimeout(renderRatingHistory, 500);
+setTimeout(()=>{
+  renderRatingHistory();
+  // Load current session if exists
+  const sess = getCurrentSession();
+  const key = getSessionKey(sess, currentInstrument);
+  const existing = JSON.parse(localStorage.getItem(key)||'null');
+  if(existing) renderSessionCard(existing, sess);
+  else document.getElementById('sessionContent').innerHTML = '<div style="color:#3a4455;font-size:12px;text-align:center;padding:10px;">Gib einen Kurs ein um die Session-Prognose zu speichern</div>';
+}, 500);
 </script>
 </body>
 </html>
