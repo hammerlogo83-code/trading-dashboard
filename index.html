@@ -168,7 +168,7 @@
 
 <div id="loading" class="loading">
   <div class="spinner"></div>
-  <span id="loadingMsg">LADE USD/CHF DATEN...</span><div id="loadingSub" style="font-size:10px;color:var(--muted);margin-top:6px;letter-spacing:1px;">Twelvedata.com API</div>
+  <span id="loadingMsg">LADE USD/CHF DATEN...</span><div id="loadingSub" style="font-size:10px;color:var(--muted);margin-top:6px;letter-spacing:1px;">Frankfurter EZB API</div>
 </div>
 
 <div class="header">
@@ -506,63 +506,68 @@ function resample4h(data) {
 
 // ── Fetch ──────────────────────────────────────────────────────────────────
 async function fetchData(days, simIntraday) {
-  document.getElementById('loadingMsg').textContent = 'VERBINDE MIT API...';
+  document.getElementById('loadingMsg').textContent = 'LADE KURSDATEN...';
 
-  // Try Frankfurter first (ECB data, no key, instant CORS)
-  try {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - days - 10); // extra days for weekends
-    const fmt = d => d.toISOString().split('T')[0];
-    const url = `https://api.frankfurter.app/${fmt(start)}..${fmt(end)}?from=USD&to=CHF`;
+  // Use latest endpoint + range endpoint as fallback
+  const today = new Date();
+  const past  = new Date();
+  past.setDate(today.getDate() - days - 14);
+  const fmt = d => d.toISOString().split('T')[0];
 
-    document.getElementById('loadingMsg').textContent = 'LADE KURSDATEN...';
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('Frankfurter HTTP ' + res.status);
-    const json = await res.json();
-    if(!json.rates) throw new Error('Keine Daten');
+  // First get the latest rate
+  const latestRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=CHF');
+  if(!latestRes.ok) throw new Error('API nicht erreichbar (HTTP ' + latestRes.status + ')');
+  const latestJson = await latestRes.json();
+  const latestRate = latestJson.rates.CHF;
 
-    const dates = Object.keys(json.rates).sort();
-    let dailyData = dates.map((dt, i) => {
-      const close = json.rates[dt].CHF;
-      const prev  = i > 0 ? json.rates[dates[i-1]].CHF : close;
-      const noise = close * 0.0015;
-      return {
-        date:  new Date(dt + 'T12:00:00'),
-        open:  prev,
-        high:  Math.max(close, prev) + Math.random() * noise,
-        low:   Math.min(close, prev) - Math.random() * noise,
-        close: close
-      };
-    });
+  // Then get historical range
+  const histUrl = `https://api.frankfurter.app/${fmt(past)}..?from=USD&to=CHF`;
+  const histRes = await fetch(histUrl);
+  if(!histRes.ok) throw new Error('Verlaufsdaten nicht verfügbar');
+  const histJson = await histRes.json();
+  if(!histJson.rates) throw new Error('Keine Verlaufsdaten');
 
-    document.getElementById('loadingMsg').textContent = 'BERECHNE INDIKATOREN...';
+  document.getElementById('loadingMsg').textContent = 'BERECHNE SIGNALE...';
 
-    if(!simIntraday) return dailyData;
+  const dates = Object.keys(histJson.rates).sort();
+  // Make sure latest date has the freshest rate
+  const lastDate = dates[dates.length - 1];
+  if(histJson.rates[lastDate]) histJson.rates[lastDate].CHF = latestRate;
 
-    // Simulate intraday from daily
-    const intradayData = [];
-    dailyData.slice(-days).forEach(day => {
-      for(let h = 7; h <= 22; h++) {
-        const t = new Date(day.date);
-        t.setHours(h, 0, 0, 0);
-        const progress = (h - 7) / 15;
-        const noise = day.close * 0.0005;
-        const price = day.open + (day.close - day.open) * progress + (Math.random()-0.5)*noise*2;
-        intradayData.push({
-          date:  new Date(t),
-          open:  price,
-          high:  price + Math.random()*noise,
-          low:   price - Math.random()*noise,
-          close: price
-        });
-      }
-    });
-    return intradayData;
+  let dailyData = dates.map((dt, i) => {
+    const close = histJson.rates[dt].CHF;
+    const prev  = i > 0 ? histJson.rates[dates[i-1]].CHF : close;
+    const noise = close * 0.0015;
+    return {
+      date:  new Date(dt + 'T12:00:00'),
+      open:  prev,
+      high:  Math.max(close, prev) + Math.random() * noise,
+      low:   Math.min(close, prev) - Math.random() * noise,
+      close: close
+    };
+  });
 
-  } catch(err) {
-    throw new Error('Daten konnten nicht geladen werden: ' + err.message);
-  }
+  if(!simIntraday) return dailyData;
+
+  // Simulate intraday
+  const intradayData = [];
+  dailyData.slice(-days).forEach(day => {
+    for(let h = 7; h <= 22; h++) {
+      const t = new Date(day.date);
+      t.setHours(h, 0, 0, 0);
+      const progress = (h - 7) / 15;
+      const noise = day.close * 0.0005;
+      const price = day.open + (day.close - day.open) * progress + (Math.random()-0.5)*noise*2;
+      intradayData.push({
+        date:  new Date(t),
+        open:  price,
+        high:  price + Math.random()*noise,
+        low:   price - Math.random()*noise,
+        close: price
+      });
+    }
+  });
+  return intradayData;
 }
   const r=json.chart?.result?.[0];
   if(!r) throw new Error('Keine Daten von Yahoo Finance');
